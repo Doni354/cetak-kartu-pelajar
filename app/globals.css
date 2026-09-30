@@ -1,26 +1,217 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --primary: #003366;
+  --primary-light: #004080;
+  --primary-dark: #002244;
+  --secondary: #0066cc;
+  --secondary-light: #3388dd;
+  --accent: #e8f0fe;
+  --background: #f0f4f8;
+  --foreground: #1a1a2e;
+  --card-bg: #ffffff;
+  --sidebar-bg: #003366;
+  --sidebar-text: #ffffff;
+  --sidebar-hover: #004080;
+  --sidebar-active: #0066cc;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --radius: 12px;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
 @theme inline {
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-primary-dark: var(--primary-dark);
+  --color-secondary: var(--secondary);
+  --color-secondary-light: var(--secondary-light);
+  --color-accent: var(--accent);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card-bg: var(--card-bg);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-sans);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+*, ::before, ::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ========================
+   Scrollbar styling
+   ======================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ========================
+   Print styles
+   ======================== */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  html, body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  .print-area {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-sheet {
+    page-break-after: always;
+    break-after: page;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  .print-sheet:last-child {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+}
+
+/* ========================
+   Card dimensions (KTP standard ISO/IEC 7810 ID-1)
+   85.60mm x 53.98mm
+   ======================== */
+.card-ktp-landscape {
+  width: 85.60mm;
+  height: 53.98mm;
+  min-width: 85.60mm;
+  max-width: 85.60mm;
+  min-height: 53.98mm;
+  max-height: 53.98mm;
+  box-sizing: border-box;
+}
+
+.card-ktp-portrait {
+  width: 53.98mm;
+  height: 85.60mm;
+  min-width: 53.98mm;
+  max-width: 53.98mm;
+  min-height: 85.60mm;
+  max-height: 85.60mm;
+  box-sizing: border-box;
+}
+
+/* Screen Scaled Preview Wrappers */
+.card-zoom-75 {
+  transform: scale(0.75);
+  transform-origin: top center;
+}
+
+.card-zoom-100 {
+  transform: scale(1);
+  transform-origin: top center;
+}
+
+.card-zoom-125 {
+  transform: scale(1.25);
+  transform-origin: top center;
+}
+
+.card-zoom-150 {
+  transform: scale(1.5);
+  transform-origin: top center;
+}
+
+/* ========================
+   Animations
+   ======================== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.3s ease-out forwards;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
 }
