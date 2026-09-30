@@ -20,8 +20,14 @@ export function proxy(request: NextRequest) {
   const sessionToken = request.cookies.get("session_token");
   const isAuthenticated = sessionToken?.value === "authenticated";
 
-  // Redirect unauthenticated users to login
+  // If unauthenticated: API routes return 401 JSON, page routes redirect to /login
   if (!isAuthenticated && !isPublicPath) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { success: false, message: "Sesi tidak valid atau telah berakhir" },
+        { status: 401 }
+      );
+    }
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

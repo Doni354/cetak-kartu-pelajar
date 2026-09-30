@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Settings, Loader2, Upload, Save, Check, Palette, Sparkles, LayoutTemplate } from "lucide-react";
-import { getSchoolSettings } from "@/lib/api";
+import { getSchoolSettings, updateSchoolSettings } from "@/lib/api";
 import type { SchoolSetting, CardTemplate } from "@/lib/types";
 import { defaultSchoolSetting, defaultStudents } from "@/lib/mock-data";
 import SafeImage from "@/components/ui/SafeImage";
@@ -74,10 +74,20 @@ export default function PengaturanPage() {
     toast.success(`Palet ${preset.name} diterapkan!`);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaved(true);
-    toast.success("Pengaturan desain kartu berhasil diperbarui!");
-    setTimeout(() => setSaved(false), 2500);
+    try {
+      const res = await updateSchoolSettings(settings);
+      if (res.success) {
+        toast.success("Pengaturan sekolah & desain berhasil disimpan!");
+      } else {
+        toast.error(res.message || "Gagal menyimpan pengaturan");
+      }
+    } catch {
+      toast.error("Gagal menyimpan ke server");
+    } finally {
+      setTimeout(() => setSaved(false), 2500);
+    }
   };
 
   if (loading) {

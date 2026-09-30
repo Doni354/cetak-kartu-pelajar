@@ -11,7 +11,7 @@ import {
   Check,
   RotateCw,
 } from "lucide-react";
-import { getStudents, getSchoolSettings } from "@/lib/api";
+import { getStudents, getSchoolSettings, updatePrintStatus, getPrintQueue } from "@/lib/api";
 import type { Student, SchoolSetting, CardTemplate } from "@/lib/types";
 import PortraitCard from "@/templates/PortraitCard";
 import LandscapeCard from "@/templates/LandscapeCard";
@@ -21,22 +21,33 @@ import toast from "react-hot-toast";
 export default function CetakPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [school, setSchool] = useState<SchoolSetting | null>(null);
+  const [printQueue, setPrintQueue] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [template, setTemplate] = useState<CardTemplate>("landscape");
   const [side, setSide] = useState<"front" | "back">("front");
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [selectedClass, setSelectedClass] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "READY" | "PRINTED">("all");
   const [showCropMarks, setShowCropMarks] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [studentsData, schoolData] = await Promise.all([
+        const [studentsData, schoolData, queueData] = await Promise.all([
           getStudents(),
           getSchoolSettings(),
+          getPrintQueue(),
         ]);
         setStudents(studentsData);
         setSchool(schoolData);
+
+        const queueMap: Record<string, string> = {};
+        if (Array.isArray(queueData)) {
+          queueData.forEach((q) => {
+            queueMap[String(q.id_siswa)] = q.status;
+          });
+        }
+        setPrintQueue(queueMap);
 
         // Check URL params for studentId
         const params = new URLSearchParams(window.location.search);
@@ -44,8 +55,16 @@ export default function CetakPage() {
         if (singleId) {
           setSelectedIds(new Set([singleId]));
         } else {
-          // Select all by default
-          setSelectedIds(new Set(studentsData.map((s) => s.id)));
+          // If any students are marked READY in the queue, select only READY ones by default!
+          const readyIds = studentsData
+            .filter((s) => queueMap[String(s.id)] === "READY")
+            .map((s) => s.id);
+          if (readyIds.length > 0) {
+            setSelectedIds(new Set(readyIds));
+          } else {
+            // Otherwise select all by default
+            setSelectedIds(new Set(studentsData.map((s) => s.id)));
+          }
         }
       } catch {
         toast.error("Gagal memuat data cetak");
@@ -66,18 +85,23 @@ export default function CetakPage() {
   };
 
   const toggleAll = () => {
-    if (selectedIds.size === students.length) {
+    if (selectedIds.size === filteredStudents.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(students.map((s) => s.id)));
+      setSelectedIds(new Set(filteredStudents.map((s) => s.id)));
     }
   };
 
   const classes = Array.from(new Set(students.map((s) => s.kelas).filter(Boolean)));
 
   const filteredStudents = students.filter((s) => {
-    if (selectedClass === "all") return true;
-    return s.kelas === selectedClass;
+    const matchClass = selectedClass === "all" || s.kelas === selectedClass;
+    const status = printQueue[String(s.id)] || "UNQUEUED";
+    const matchStatus =
+      statusFilter === "all" ||
+      (statusFilter === "READY" && status === "READY") ||
+      (statusFilter === "PRINTED" && status === "PRINTED");
+    return matchClass && matchStatus;
   });
 
   const selectedStudents = students.filter((s) => selectedIds.has(s.id));
@@ -88,11 +112,29 @@ export default function CetakPage() {
   const cardsPerPage = template === "landscape" ? 8 : 6;
   const totalPages = Math.ceil(selectedStudents.length / cardsPerPage);
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (selectedStudents.length === 0) {
       toast.error("Pilih minimal 1 siswa untuk dicetak");
       return;
     }
+
+    // Update print queue status in Google Sheet CETAK
+    try {
+      await Promise.all(
+        selectedStudents.map((s) => updatePrintStatus(s.id, "PRINTED"))
+      );
+      // Update local state
+      setPrintQueue((prev) => {
+        const next = { ...prev };
+        selectedStudents.forEach((s) => {
+          next[String(s.id)] = "PRINTED";
+        });
+        return next;
+      });
+    } catch {
+      // Continue even if logging fails
+    }
+
     window.print();
   };
 
@@ -214,12 +256,14 @@ export default function CetakPage() {
                   onClick={toggleAll}
                   className="flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-primary transition-colors"
                 >
-                  {selectedIds.size === students.length ? (
+                  {selectedIds.size === filteredStudents.length && filteredStudents.length > 0 ? (
                     <CheckSquare size={16} className="text-primary" />
                   ) : (
                     <Square size={16} className="text-slate-400" />
                   )}
-                  {selectedIds.size === students.length ? "Batal Pilih Semua" : "Pilih Semua Siswa"}
+                  {selectedIds.size === filteredStudents.length && filteredStudents.length > 0
+                    ? "Batal Pilih Semua"
+                    : `Pilih Semua (${filteredStudents.length})`}
                 </button>
 
                 <span className="text-xs text-slate-400">|</span>
@@ -229,45 +273,70 @@ export default function CetakPage() {
                 </span>
               </div>
 
-              {classes.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Status Filter */}
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">Filter Kelas:</span>
+                  <span className="text-xs text-slate-500">Antrian:</span>
                   <select
-                    value={selectedClass}
-                    onChange={(e) => setSelectedClass(e.target.value)}
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as any)}
                     className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary"
                   >
-                    <option value="all">Semua Kelas</option>
-                    {classes.map((cls) => (
-                      <option key={cls} value={cls}>
-                        {cls}
-                      </option>
-                    ))}
+                    <option value="all">Semua Siswa</option>
+                    <option value="READY">🟢 Hanya Siap Cetak (READY)</option>
+                    <option value="PRINTED">🔵 Sudah Dicetak (PRINTED)</option>
                   </select>
                 </div>
-              )}
+
+                {classes.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Kelas:</span>
+                    <select
+                      value={selectedClass}
+                      onChange={(e) => setSelectedClass(e.target.value)}
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="all">Semua Kelas</option>
+                      {classes.map((cls) => (
+                        <option key={cls} value={cls}>
+                          {cls}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Student Chips */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1">
               {filteredStudents.map((student) => {
                 const isSelected = selectedIds.has(student.id);
+                const qStatus = printQueue[String(student.id)];
                 return (
                   <button
                     key={student.id}
                     onClick={() => toggleSelect(student.id)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left border text-xs transition-all ${
+                    className={`flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl text-left border text-xs transition-all ${
                       isSelected
                         ? "bg-primary/5 border-primary text-slate-900 font-semibold"
                         : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
                     }`}
                   >
-                    {isSelected ? (
-                      <CheckSquare size={14} className="text-primary shrink-0" />
-                    ) : (
-                      <Square size={14} className="text-slate-400 shrink-0" />
+                    <div className="flex items-center gap-2 truncate">
+                      {isSelected ? (
+                        <CheckSquare size={14} className="text-primary shrink-0" />
+                      ) : (
+                        <Square size={14} className="text-slate-400 shrink-0" />
+                      )}
+                      <span className="truncate">{student.nama}</span>
+                    </div>
+                    {qStatus === "READY" && (
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Siap Cetak (READY)" />
                     )}
-                    <span className="truncate">{student.nama}</span>
+                    {qStatus === "PRINTED" && (
+                      <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" title="Sudah Dicetak" />
+                    )}
                   </button>
                 );
               })}

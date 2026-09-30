@@ -14,6 +14,11 @@ import {
   Printer,
   FileSpreadsheet,
   Check,
+  RefreshCw,
+  Download,
+  ExternalLink,
+  CheckCircle2,
+  Clock,
 } from "lucide-react";
 import {
   getStudents,
@@ -21,11 +26,24 @@ import {
   updateStudent,
   deleteStudent,
   getSchoolSettings,
+  getPrintQueue,
+  updatePrintStatus,
 } from "@/lib/api";
+import {
+  getCachedStudents,
+  setCachedStudents,
+  getCachedSchool,
+  setCachedSchool,
+  getCachedPrintQueue,
+  setCachedPrintQueue,
+} from "@/lib/cache";
 import type { Student, StudentFormData, SchoolSetting } from "@/lib/types";
 import SafeImage from "@/components/ui/SafeImage";
 import CardWrapper from "@/components/cards/CardWrapper";
 import toast from "react-hot-toast";
+
+const SPREADSHEET_URL =
+  "https://docs.google.com/spreadsheets/d/1hCq8PSGQX7nDpIiSvPB6NsUlD0N-yXc2saPUW87a6-E/edit";
 
 const emptyForm: StudentFormData = {
   nama: "",
@@ -38,11 +56,15 @@ const emptyForm: StudentFormData = {
 };
 
 export default function SiswaPage() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [school, setSchool] = useState<SchoolSetting | null>(null);
-  const [loading, setLoading] = useState(true);
+  // SWR: Initialize instantly from client cache if available (0ms load!)
+  const [students, setStudents] = useState<Student[]>(() => getCachedStudents() || []);
+  const [school, setSchool] = useState<SchoolSetting | null>(() => getCachedSchool());
+  const [printQueue, setPrintQueue] = useState<Record<string, string>>(() => getCachedPrintQueue() || {});
+  const [loading, setLoading] = useState(() => !getCachedStudents());
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
+  const [queueFilter, setQueueFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [previewStudent, setPreviewStudent] = useState<Student | null>(null);
@@ -51,25 +73,105 @@ export default function SiswaPage() {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const fetchStudents = useCallback(async () => {
-    setLoading(true);
+  // SWR background revalidation
+  const fetchStudents = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    if (!getCachedStudents()) setLoading(true);
+
     try {
-      const [data, schoolData] = await Promise.all([
+      const [data, schoolData, queueData] = await Promise.all([
         getStudents(),
         getSchoolSettings(),
+        getPrintQueue(),
       ]);
+
       setStudents(data);
+      setCachedStudents(data);
+
       setSchool(schoolData);
+      setCachedSchool(schoolData);
+
+      const queueMap: Record<string, string> = {};
+      if (Array.isArray(queueData)) {
+        queueData.forEach((q) => {
+          queueMap[String(q.id_siswa)] = q.status;
+        });
+      }
+      setPrintQueue(queueMap);
+      setCachedPrintQueue(queueMap);
+
+      if (isRefresh) {
+        toast.success("Data berhasil disinkronisasi dengan Google Spreadsheet!");
+      }
     } catch {
-      toast.error("Gagal memuat data siswa");
+      if (!getCachedStudents()) {
+        toast.error("Gagal memuat data siswa");
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
     fetchStudents();
   }, [fetchStudents]);
+
+  // Optimistic queue toggle (0ms)
+  const handleToggleQueue = async (studentId: string | number) => {
+    const current = printQueue[String(studentId)];
+    const newStatus = current === "READY" ? "PRINTED" : "READY";
+
+    // Instant local update
+    const nextQueue = { ...printQueue, [String(studentId)]: newStatus };
+    setPrintQueue(nextQueue);
+    setCachedPrintQueue(nextQueue);
+
+    toast.success(
+      newStatus === "READY"
+        ? "Siswa dimasukkan ke antrian Siap Cetak (READY)"
+        : "Status cetak diubah menjadi Selesai (PRINTED)"
+    );
+
+    // Silent background sync
+    try {
+      await updatePrintStatus(studentId, newStatus);
+    } catch {
+      // Revert if failed
+      setPrintQueue(printQueue);
+      setCachedPrintQueue(printQueue);
+      toast.error("Gagal memperbarui antrian di Google Sheet");
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (students.length === 0) {
+      toast.error("Tidak ada data siswa untuk diekspor");
+      return;
+    }
+
+    const headers = ["ID", "Nama", "TTL", "Alamat", "NIS", "Foto URL", "Kelas", "Tahun"];
+    const rows = students.map((s) => [
+      `"${s.id}"`,
+      `"${(s.nama || "").replace(/"/g, '""')}"`,
+      `"${(s.ttl || "").replace(/"/g, '""')}"`,
+      `"${(s.alamat || "").replace(/"/g, '""')}"`,
+      `"${s.nis || ""}"`,
+      `"${s.foto_url || ""}"`,
+      `"${s.kelas || ""}"`,
+      `"${s.tahun || ""}"`,
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Data_Siswa_${school?.nama_sekolah || "Sekolah"}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Data siswa berhasil diekspor ke CSV!");
+  };
 
   const classes = Array.from(new Set(students.map((s) => s.kelas).filter(Boolean)));
 
@@ -79,7 +181,15 @@ export default function SiswaPage() {
       s.nis?.toLowerCase().includes(search.toLowerCase()) ||
       s.alamat?.toLowerCase().includes(search.toLowerCase());
     const matchClass = selectedClass === "all" || s.kelas === selectedClass;
-    return matchSearch && matchClass;
+
+    const status = printQueue[String(s.id)] || "UNQUEUED";
+    const matchQueue =
+      queueFilter === "all" ||
+      (queueFilter === "READY" && status === "READY") ||
+      (queueFilter === "PRINTED" && status === "PRINTED") ||
+      (queueFilter === "UNQUEUED" && status !== "READY" && status !== "PRINTED");
+
+    return matchSearch && matchClass && matchQueue;
   });
 
   const openAddForm = () => {
@@ -194,22 +304,59 @@ export default function SiswaPage() {
             Manajemen Data Siswa
           </h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            Kelola data identitas dan foto siswa untuk cetak kartu pelajar
+            Sinkron langsung dengan Google Spreadsheet • Kelola data identitas dan antrian cetak
           </p>
         </div>
 
-        <button
-          onClick={openAddForm}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-light transition-all shadow-sm self-start sm:self-auto"
-        >
-          <Plus size={18} />
-          Tambah Siswa
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {/* Sync Button */}
+          <button
+            onClick={() => fetchStudents(true)}
+            disabled={refreshing || loading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all shadow-xs disabled:opacity-50"
+            title="Muat ulang data dari Google Spreadsheet"
+          >
+            <RefreshCw size={14} className={refreshing ? "animate-spin text-primary" : "text-slate-500"} />
+            <span className="hidden sm:inline">Sinkronisasi</span>
+          </button>
+
+          {/* Export CSV Button */}
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all shadow-xs"
+            title="Download cadangan data siswa format CSV"
+          >
+            <Download size={14} className="text-slate-500" />
+            <span className="hidden sm:inline">Ekspor CSV</span>
+          </button>
+
+          {/* Open Google Sheet External */}
+          <a
+            href={SPREADSHEET_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold transition-all shadow-xs"
+            title="Buka Google Spreadsheet di tab baru"
+          >
+            <FileSpreadsheet size={14} className="text-emerald-600" />
+            <span className="hidden md:inline">Spreadsheet</span>
+            <ExternalLink size={12} className="text-emerald-500" />
+          </a>
+
+          {/* Add Student */}
+          <button
+            onClick={openAddForm}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-light transition-all shadow-sm"
+          >
+            <Plus size={16} />
+            <span>Tambah Siswa</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:max-w-md">
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="relative w-full md:max-w-md">
           <Search
             size={16}
             className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
@@ -223,16 +370,17 @@ export default function SiswaPage() {
           />
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-between md:justify-end">
+          {/* Class Filter */}
           {classes.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="text-xs text-slate-500 whitespace-nowrap">Kelas:</span>
               <select
                 value={selectedClass}
                 onChange={(e) => setSelectedClass(e.target.value)}
-                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
-                <option value="all">Semua Kelas ({students.length})</option>
+                <option value="all">Semua Kelas</option>
                 {classes.map((cls) => (
                   <option key={cls} value={cls}>
                     {cls}
@@ -241,6 +389,21 @@ export default function SiswaPage() {
               </select>
             </div>
           )}
+
+          {/* Queue Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500 whitespace-nowrap">Status Cetak:</span>
+            <select
+              value={queueFilter}
+              onChange={(e) => setQueueFilter(e.target.value)}
+              className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="all">Semua Status</option>
+              <option value="READY">🟢 Siap Cetak (READY)</option>
+              <option value="PRINTED">🔵 Sudah Dicetak</option>
+              <option value="UNQUEUED">⚪ Belum Masuk Antrian</option>
+            </select>
+          </div>
 
           <span className="text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
             Total: <strong className="text-slate-800">{filteredStudents.length}</strong>
@@ -260,6 +423,7 @@ export default function SiswaPage() {
                 <th className="py-3.5 px-4 hidden sm:table-cell">Tempat, Tgl Lahir</th>
                 <th className="py-3.5 px-4">Kelas</th>
                 <th className="py-3.5 px-4 hidden md:table-cell">Alamat</th>
+                <th className="py-3.5 px-4 text-center">Status Cetak</th>
                 <th className="py-3.5 px-4 text-right">Aksi</th>
               </tr>
             </thead>
@@ -267,110 +431,146 @@ export default function SiswaPage() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    <td colSpan={7} className="py-4 px-4">
+                    <td colSpan={8} className="py-4 px-4">
                       <div className="h-9 bg-slate-100 rounded-lg" />
                     </td>
                   </tr>
                 ))
               ) : filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-16 text-center text-slate-400">
+                  <td colSpan={8} className="py-16 text-center text-slate-400">
                     <p className="text-sm">Tidak ada data siswa yang ditemukan.</p>
                   </td>
                 </tr>
               ) : (
-                filteredStudents.map((student) => (
-                  <tr
-                    key={student.id}
-                    className="hover:bg-slate-50/70 transition-colors group"
-                  >
-                    {/* Foto */}
-                    <td className="py-3 px-4">
-                      <SafeImage
-                        src={student.foto_url}
-                        alt={student.nama}
-                        className="w-9 h-11 rounded-md object-cover border border-slate-200 shadow-2xs"
-                        fallbackType="avatar"
-                        fallbackText={student.nama}
-                      />
-                    </td>
+                filteredStudents.map((student) => {
+                  const status = printQueue[String(student.id)];
+                  const isReady = status === "READY";
+                  const isPrinted = status === "PRINTED";
 
-                    {/* Nama */}
-                    <td className="py-3 px-4 font-semibold text-slate-900">
-                      {student.nama}
-                    </td>
+                  return (
+                    <tr
+                      key={student.id}
+                      className="hover:bg-slate-50/70 transition-colors group"
+                    >
+                      {/* Foto */}
+                      <td className="py-3 px-4">
+                        <SafeImage
+                          src={student.foto_url}
+                          alt={student.nama}
+                          className="w-9 h-11 rounded-md object-cover border border-slate-200 shadow-2xs"
+                          fallbackType="avatar"
+                          fallbackText={student.nama}
+                        />
+                      </td>
 
-                    {/* NIS */}
-                    <td className="py-3 px-4 font-mono font-medium text-slate-700">
-                      {student.nis}
-                    </td>
+                      {/* Nama */}
+                      <td className="py-3 px-4 font-semibold text-slate-900">
+                        {student.nama}
+                      </td>
 
-                    {/* TTL */}
-                    <td className="py-3 px-4 text-slate-600 hidden sm:table-cell">
-                      {student.ttl}
-                    </td>
+                      {/* NIS */}
+                      <td className="py-3 px-4 font-mono font-medium text-slate-700">
+                        {student.nis}
+                      </td>
 
-                    {/* Kelas */}
-                    <td className="py-3 px-4">
-                      <span className="inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">
-                        {student.kelas}
-                      </span>
-                    </td>
+                      {/* TTL */}
+                      <td className="py-3 px-4 text-slate-600 hidden sm:table-cell">
+                        {student.ttl}
+                      </td>
 
-                    {/* Alamat */}
-                    <td className="py-3 px-4 text-slate-500 max-w-xs truncate hidden md:table-cell">
-                      {student.alamat}
-                    </td>
+                      {/* Kelas */}
+                      <td className="py-3 px-4">
+                        <span className="inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">
+                          {student.kelas}
+                        </span>
+                      </td>
 
-                    {/* Actions */}
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {/* Quick Card Preview */}
+                      {/* Alamat */}
+                      <td className="py-3 px-4 text-slate-500 max-w-xs truncate hidden md:table-cell">
+                        {student.alamat}
+                      </td>
+
+                      {/* Status Cetak */}
+                      <td className="py-3 px-4 text-center">
                         <button
-                          onClick={() => setPreviewStudent(student)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-primary hover:bg-primary/10 transition-colors"
-                          title="Lihat Pratinjau Kartu"
+                          onClick={() => handleToggleQueue(student.id)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all border ${
+                            isReady
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                              : isPrinted
+                              ? "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                              : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
+                          }`}
+                          title="Klik untuk mengubah status antrian cetak"
                         >
-                          <Eye size={15} />
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              isReady
+                                ? "bg-emerald-500 animate-pulse"
+                                : isPrinted
+                                ? "bg-blue-500"
+                                : "bg-slate-400"
+                            }`}
+                          />
+                          {isReady
+                            ? "Siap Cetak"
+                            : isPrinted
+                            ? "Selesai"
+                            : "+ Antrikan"}
                         </button>
+                      </td>
 
-                        {/* Print */}
-                        <button
-                          onClick={() => {
-                            window.location.href = `/cetak?studentId=${student.id}`;
-                          }}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-secondary hover:bg-secondary/10 transition-colors"
-                          title="Cetak Kartu Siswa Ini"
-                        >
-                          <Printer size={15} />
-                        </button>
+                      {/* Actions */}
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {/* Quick Card Preview */}
+                          <button
+                            onClick={() => setPreviewStudent(student)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-primary hover:bg-primary/10 transition-colors"
+                            title="Lihat Pratinjau Kartu"
+                          >
+                            <Eye size={15} />
+                          </button>
 
-                        {/* Edit */}
-                        <button
-                          onClick={() => openEditForm(student)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                          title="Edit Data Siswa"
-                        >
-                          <Edit2 size={15} />
-                        </button>
+                          {/* Print */}
+                          <button
+                            onClick={() => {
+                              window.location.href = `/cetak?studentId=${student.id}`;
+                            }}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-secondary hover:bg-secondary/10 transition-colors"
+                            title="Cetak Kartu Siswa Ini"
+                          >
+                            <Printer size={15} />
+                          </button>
 
-                        {/* Delete */}
-                        <button
-                          onClick={() => handleDelete(student.id)}
-                          disabled={deletingId === student.id}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          title="Hapus Siswa"
-                        >
-                          {deletingId === student.id ? (
-                            <Loader2 size={15} className="animate-spin text-red-500" />
-                          ) : (
-                            <Trash2 size={15} />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {/* Edit */}
+                          <button
+                            onClick={() => openEditForm(student)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            title="Edit Data Siswa"
+                          >
+                            <Edit2 size={15} />
+                          </button>
+
+                          {/* Delete */}
+                          <button
+                            onClick={() => handleDelete(student.id)}
+                            disabled={deletingId === student.id}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Hapus Siswa"
+                          >
+                            {deletingId === student.id ? (
+                              <Loader2 size={15} className="animate-spin text-red-500" />
+                            ) : (
+                              <Trash2 size={15} />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
