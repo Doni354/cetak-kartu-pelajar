@@ -14,14 +14,21 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { getStudents, getSchoolSettings } from "@/lib/api";
+import {
+  getCachedStudents,
+  setCachedStudents,
+  getCachedSchool,
+  setCachedSchool,
+} from "@/lib/cache";
 import type { Student, SchoolSetting, CardTemplate } from "@/lib/types";
 import CardWrapper from "@/components/cards/CardWrapper";
 import toast from "react-hot-toast";
 
 export default function PreviewPage() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [school, setSchool] = useState<SchoolSetting | null>(null);
-  const [loading, setLoading] = useState(true);
+  // SWR: Instant load from cache (0ms)
+  const [students, setStudents] = useState<Student[]>(() => getCachedStudents() || []);
+  const [school, setSchool] = useState<SchoolSetting | null>(() => getCachedSchool());
+  const [loading, setLoading] = useState(() => !getCachedStudents());
   const [template, setTemplate] = useState<CardTemplate>("portrait");
   const [search, setSearch] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
@@ -30,15 +37,21 @@ export default function PreviewPage() {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!getCachedStudents()) setLoading(true);
       try {
         const [studentsData, schoolData] = await Promise.all([
           getStudents(),
           getSchoolSettings(),
         ]);
         setStudents(studentsData);
+        setCachedStudents(studentsData);
+
         setSchool(schoolData);
+        setCachedSchool(schoolData);
       } catch {
-        toast.error("Gagal memuat data kartu");
+        if (!getCachedStudents()) {
+          toast.error("Gagal memuat data kartu");
+        }
       } finally {
         setLoading(false);
       }

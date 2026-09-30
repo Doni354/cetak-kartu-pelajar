@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Settings, Loader2, Upload, Save, Check, Palette, Sparkles, LayoutTemplate } from "lucide-react";
 import { getSchoolSettings, updateSchoolSettings } from "@/lib/api";
+import { getCachedSchool, setCachedSchool } from "@/lib/cache";
 import type { SchoolSetting, CardTemplate } from "@/lib/types";
 import { defaultSchoolSetting, defaultStudents } from "@/lib/mock-data";
 import SafeImage from "@/components/ui/SafeImage";
@@ -19,19 +20,25 @@ const colorPresets = [
 ];
 
 export default function PengaturanPage() {
-  const [settings, setSettings] = useState<SchoolSetting>(defaultSchoolSetting);
-  const [loading, setLoading] = useState(true);
+  // SWR: Instant load from cache (0ms)
+  const [settings, setSettings] = useState<SchoolSetting>(() => getCachedSchool() || defaultSchoolSetting);
+  const [loading, setLoading] = useState(() => !getCachedSchool());
   const [uploading, setUploading] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<CardTemplate>("portrait");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     const fetchSettings = async () => {
+      if (!getCachedSchool()) setLoading(true);
       try {
         const data = await getSchoolSettings();
-        setSettings({ ...defaultSchoolSetting, ...data });
+        const merged = { ...defaultSchoolSetting, ...data };
+        setSettings(merged);
+        setCachedSchool(merged);
       } catch {
-        toast.error("Gagal memuat pengaturan sekolah");
+        if (!getCachedSchool()) {
+          toast.error("Gagal memuat pengaturan sekolah");
+        }
       } finally {
         setLoading(false);
       }
@@ -53,7 +60,11 @@ export default function PengaturanPage() {
       const data = await res.json();
 
       if (data.success && data.url) {
-        setSettings((prev) => ({ ...prev, logo_url: data.url }));
+        setSettings((prev) => {
+          const updated = { ...prev, logo_url: data.url };
+          setCachedSchool(updated);
+          return updated;
+        });
         toast.success("Logo sekolah berhasil diunggah!");
       } else {
         toast.error(data.message || "Gagal upload logo ke Cloudinary");
@@ -66,25 +77,32 @@ export default function PengaturanPage() {
   };
 
   const applyPreset = (preset: typeof colorPresets[0]) => {
-    setSettings((prev) => ({
-      ...prev,
-      warna_primary: preset.primary,
-      warna_secondary: preset.secondary,
-    }));
+    setSettings((prev) => {
+      const updated = {
+        ...prev,
+        warna_primary: preset.primary,
+        warna_secondary: preset.secondary,
+      };
+      setCachedSchool(updated);
+      return updated;
+    });
     toast.success(`Palet ${preset.name} diterapkan!`);
   };
 
   const handleSave = async () => {
     setSaved(true);
+    // Optimistic: Simpan ke cache lokal langsung agar langsung aktif di seluruh halaman
+    setCachedSchool(settings);
+
     try {
       const res = await updateSchoolSettings(settings);
       if (res.success) {
-        toast.success("Pengaturan sekolah & desain berhasil disimpan!");
+        toast.success("Pengaturan sekolah & desain berhasil disimpan ke Google Sheets!");
       } else {
-        toast.error(res.message || "Gagal menyimpan pengaturan");
+        toast.error(res.message || "Gagal menyimpan ke Google Sheets, data tetap aman di cache browser");
       }
     } catch {
-      toast.error("Gagal menyimpan ke server");
+      toast.error("Gagal sinkron ke Google Sheets, data tetap aman di cache browser");
     } finally {
       setTimeout(() => setSaved(false), 2500);
     }

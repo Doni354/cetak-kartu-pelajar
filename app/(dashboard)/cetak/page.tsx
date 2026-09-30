@@ -12,6 +12,14 @@ import {
   RotateCw,
 } from "lucide-react";
 import { getStudents, getSchoolSettings, updatePrintStatus, getPrintQueue } from "@/lib/api";
+import {
+  getCachedStudents,
+  setCachedStudents,
+  getCachedSchool,
+  setCachedSchool,
+  getCachedPrintQueue,
+  setCachedPrintQueue,
+} from "@/lib/cache";
 import type { Student, SchoolSetting, CardTemplate } from "@/lib/types";
 import PortraitCard from "@/templates/PortraitCard";
 import LandscapeCard from "@/templates/LandscapeCard";
@@ -19,19 +27,29 @@ import CardBack from "@/templates/CardBack";
 import toast from "react-hot-toast";
 
 export default function CetakPage() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [school, setSchool] = useState<SchoolSetting | null>(null);
-  const [printQueue, setPrintQueue] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
+  // SWR: Instant load from cache (0ms)
+  const [students, setStudents] = useState<Student[]>(() => getCachedStudents() || []);
+  const [school, setSchool] = useState<SchoolSetting | null>(() => getCachedSchool());
+  const [printQueue, setPrintQueue] = useState<Record<string, string>>(() => getCachedPrintQueue() || {});
+  const [loading, setLoading] = useState(() => !getCachedStudents());
   const [template, setTemplate] = useState<CardTemplate>("landscape");
   const [side, setSide] = useState<"front" | "back">("front");
-  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(() => {
+    const cached = getCachedStudents();
+    const qMap = getCachedPrintQueue() || {};
+    if (cached && cached.length > 0) {
+      const ready = cached.filter((s) => qMap[String(s.id)] === "READY").map((s) => s.id);
+      return new Set(ready.length > 0 ? ready : cached.map((s) => s.id));
+    }
+    return new Set();
+  });
   const [selectedClass, setSelectedClass] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "READY" | "PRINTED">("all");
   const [showCropMarks, setShowCropMarks] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!getCachedStudents()) setLoading(true);
       try {
         const [studentsData, schoolData, queueData] = await Promise.all([
           getStudents(),
@@ -39,7 +57,10 @@ export default function CetakPage() {
           getPrintQueue(),
         ]);
         setStudents(studentsData);
+        setCachedStudents(studentsData);
+
         setSchool(schoolData);
+        setCachedSchool(schoolData);
 
         const queueMap: Record<string, string> = {};
         if (Array.isArray(queueData)) {
@@ -48,26 +69,27 @@ export default function CetakPage() {
           });
         }
         setPrintQueue(queueMap);
+        setCachedPrintQueue(queueMap);
 
         // Check URL params for studentId
         const params = new URLSearchParams(window.location.search);
         const singleId = params.get("studentId");
         if (singleId) {
           setSelectedIds(new Set([singleId]));
-        } else {
-          // If any students are marked READY in the queue, select only READY ones by default!
+        } else if (selectedIds.size === 0) {
           const readyIds = studentsData
             .filter((s) => queueMap[String(s.id)] === "READY")
             .map((s) => s.id);
           if (readyIds.length > 0) {
             setSelectedIds(new Set(readyIds));
           } else {
-            // Otherwise select all by default
             setSelectedIds(new Set(studentsData.map((s) => s.id)));
           }
         }
       } catch {
-        toast.error("Gagal memuat data cetak");
+        if (!getCachedStudents()) {
+          toast.error("Gagal memuat data cetak");
+        }
       } finally {
         setLoading(false);
       }
@@ -107,8 +129,6 @@ export default function CetakPage() {
   const selectedStudents = students.filter((s) => selectedIds.has(s.id));
 
   // Determine cards per A4 sheet:
-  // Landscape (85.6mm x 54mm): 2 cols x 4 rows = 8 cards per page
-  // Portrait (54mm x 85.6mm): 3 cols x 2 rows = 6 cards or 2 cols x 3 rows = 6 cards per page
   const cardsPerPage = template === "landscape" ? 8 : 6;
   const totalPages = Math.ceil(selectedStudents.length / cardsPerPage);
 
@@ -118,24 +138,21 @@ export default function CetakPage() {
       return;
     }
 
-    // Update print queue status in Google Sheet CETAK
-    try {
-      await Promise.all(
-        selectedStudents.map((s) => updatePrintStatus(s.id, "PRINTED"))
-      );
-      // Update local state
-      setPrintQueue((prev) => {
-        const next = { ...prev };
-        selectedStudents.forEach((s) => {
-          next[String(s.id)] = "PRINTED";
-        });
-        return next;
-      });
-    } catch {
-      // Continue even if logging fails
-    }
+    // 1. Optimistic Update (0ms)
+    const nextQueue = { ...printQueue };
+    selectedStudents.forEach((s) => {
+      nextQueue[String(s.id)] = "PRINTED";
+    });
+    setPrintQueue(nextQueue);
+    setCachedPrintQueue(nextQueue);
 
+    // 2. Trigger native browser print dialog
     window.print();
+
+    // 3. Silent background sync to Google Sheet CETAK
+    Promise.all(
+      selectedStudents.map((s) => updatePrintStatus(s.id, "PRINTED"))
+    ).catch(() => {});
   };
 
   if (loading) {

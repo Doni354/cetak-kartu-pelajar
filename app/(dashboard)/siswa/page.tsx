@@ -250,23 +250,46 @@ export default function SiswaPage() {
 
     try {
       if (editingStudent) {
-        const result = await updateStudent({ ...form, id: editingStudent.id });
-        if (result.success) {
-          toast.success("Data siswa berhasil diperbarui");
-          closeForm();
-          fetchStudents();
-        } else {
-          toast.error("Gagal memperbarui siswa");
-        }
+        // 1. Optimistic Update (0ms UI response)
+        const updatedStudent: Student = { ...form, id: editingStudent.id };
+        const updatedList = students.map((s) =>
+          String(s.id) === String(editingStudent.id) ? updatedStudent : s
+        );
+        setStudents(updatedList);
+        setCachedStudents(updatedList);
+        toast.success("Data siswa berhasil diperbarui");
+        closeForm();
+
+        // 2. Background sync to Google Sheets
+        updateStudent(updatedStudent).catch(() => {
+          toast.error("Gagal sinkron perubahan ke Google Sheet");
+        });
       } else {
-        const result = await addStudent(form);
-        if (result.success) {
-          toast.success("Siswa baru berhasil ditambahkan");
-          closeForm();
-          fetchStudents();
-        } else {
-          toast.error("Gagal menambahkan siswa");
-        }
+        // 1. Optimistic Add (0ms UI response)
+        const tempId = String(Date.now());
+        const newStudent: Student = { ...form, id: tempId };
+        const updatedList = [newStudent, ...students];
+        setStudents(updatedList);
+        setCachedStudents(updatedList);
+        toast.success("Siswa baru berhasil ditambahkan");
+        closeForm();
+
+        // 2. Background sync to Google Sheets
+        addStudent(form)
+          .then((res) => {
+            if (res.id && res.id !== tempId) {
+              setStudents((prev) => {
+                const mapped = prev.map((s) =>
+                  s.id === tempId ? { ...s, id: res.id! } : s
+                );
+                setCachedStudents(mapped);
+                return mapped;
+              });
+            }
+          })
+          .catch(() => {
+            toast.error("Gagal sinkron siswa baru ke Google Sheet");
+          });
       }
     } catch {
       toast.error("Terjadi kesalahan sistem");
@@ -278,19 +301,26 @@ export default function SiswaPage() {
   const handleDelete = async (id: string | number) => {
     if (!confirm("Apakah Anda yakin ingin menghapus data siswa ini?")) return;
 
-    setDeletingId(id);
+    // 1. Optimistic Delete (0ms UI response)
+    const previousList = [...students];
+    const updatedList = students.filter((s) => String(s.id) !== String(id));
+    setStudents(updatedList);
+    setCachedStudents(updatedList);
+    toast.success("Data siswa berhasil dihapus");
+
+    // 2. Background sync to Google Sheets
     try {
       const res = await deleteStudent(id);
-      if (res.success) {
-        toast.success("Data siswa berhasil dihapus");
-        fetchStudents();
-      } else {
-        toast.error("Gagal menghapus siswa");
+      if (!res.success) {
+        // Rollback if failed
+        setStudents(previousList);
+        setCachedStudents(previousList);
+        toast.error("Gagal menghapus siswa dari Google Sheet");
       }
     } catch {
-      toast.error("Terjadi kesalahan saat menghapus");
-    } finally {
-      setDeletingId(null);
+      setStudents(previousList);
+      setCachedStudents(previousList);
+      toast.error("Gagal menghapus siswa dari Google Sheet");
     }
   };
 

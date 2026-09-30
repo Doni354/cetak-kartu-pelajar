@@ -19,26 +19,38 @@ import { getStudents, getSchoolSettings } from "@/lib/api";
 import type { Student, SchoolSetting, CardTemplate } from "@/lib/types";
 import CardWrapper from "@/components/cards/CardWrapper";
 import SafeImage from "@/components/ui/SafeImage";
+import {
+  getCachedStudents,
+  setCachedStudents,
+  getCachedSchool,
+  setCachedSchool,
+} from "@/lib/cache";
 import toast from "react-hot-toast";
 
 export default function DashboardPage() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [school, setSchool] = useState<SchoolSetting | null>(null);
-  const [loading, setLoading] = useState(true);
+  // SWR: Instant load from cache (0ms)
+  const [students, setStudents] = useState<Student[]>(() => getCachedStudents() || []);
+  const [school, setSchool] = useState<SchoolSetting | null>(() => getCachedSchool());
+  const [loading, setLoading] = useState(() => !getCachedStudents());
   const [previewTemplate, setPreviewTemplate] = useState<CardTemplate>("portrait");
   const [selectedStudentIndex, setSelectedStudentIndex] = useState(0);
 
   const fetchData = async () => {
-    setLoading(true);
+    if (!getCachedStudents()) setLoading(true);
     try {
       const [studentsData, schoolData] = await Promise.all([
         getStudents(),
         getSchoolSettings(),
       ]);
       setStudents(studentsData);
+      setCachedStudents(studentsData);
+
       setSchool(schoolData);
+      setCachedSchool(schoolData);
     } catch {
-      toast.error("Gagal memuat data dashboard");
+      if (!getCachedStudents()) {
+        toast.error("Gagal memuat data dashboard");
+      }
     } finally {
       setLoading(false);
     }
