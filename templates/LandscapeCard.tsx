@@ -23,13 +23,29 @@ export default function LandscapeCard({
         boxShadow: "0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.08)",
       }}
     >
-      {/* Subtle Security Background Watermark */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.035] flex items-center justify-center overflow-hidden">
-        <svg viewBox="0 0 100 100" className="w-[120%] h-[120%] text-slate-900 fill-current">
-          <circle cx="50" cy="50" r="45" />
-          <polygon points="50,15 61,38 85,38 66,54 73,78 50,64 27,78 34,54 15,38 39,38" fill="#fff" />
-        </svg>
-      </div>
+      {/* Center Watermark: Official School Logo */}
+      {school.show_watermark !== false && (
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-0">
+          {school.logo_url ? (
+            <img
+              src={school.logo_url}
+              alt=""
+              className="w-32 h-32 object-contain select-none grayscale contrast-125"
+              style={{ opacity: school.watermark_opacity ?? 0.08 }}
+            />
+          ) : (
+            <svg
+              viewBox="0 0 100 100"
+              className="w-32 h-32 text-slate-900 fill-current"
+              style={{ opacity: school.watermark_opacity ?? 0.06 }}
+            >
+              <path d="M50 8 L85 22 L85 50 C85 72 50 92 50 92 C50 92 15 72 15 50 L15 22 Z" fill="none" stroke="currentColor" strokeWidth="4" />
+              <path d="M32 45 L50 35 L68 45 L50 55 Z" />
+              <path d="M40 52 L40 64 C40 66 60 66 60 64 L60 52" fill="none" stroke="currentColor" strokeWidth="3" />
+            </svg>
+          )}
+        </div>
+      )}
 
       {/* Top Header */}
       <div
@@ -114,7 +130,7 @@ export default function LandscapeCard({
         <div className="flex-1 flex flex-col justify-between h-full text-[7px] leading-tight">
           <div className="space-y-1">
             <div className="flex items-start">
-              <span className="w-12 shrink-0 text-slate-500 font-medium">Nama</span>
+              <span className="w-13 shrink-0 text-slate-500 font-medium">Nama</span>
               <span className="mr-1 text-slate-400">:</span>
               <span className="font-bold text-slate-900 truncate uppercase">
                 {student.nama}
@@ -122,7 +138,7 @@ export default function LandscapeCard({
             </div>
 
             <div className="flex items-start">
-              <span className="w-12 shrink-0 text-slate-500 font-medium">NIS / NISN</span>
+              <span className="w-13 shrink-0 text-slate-500 font-medium">NIS / NISN</span>
               <span className="mr-1 text-slate-400">:</span>
               <span className="font-bold text-slate-900 font-mono">
                 {student.nis}
@@ -130,7 +146,7 @@ export default function LandscapeCard({
             </div>
 
             <div className="flex items-start">
-              <span className="w-12 shrink-0 text-slate-500 font-medium">TTL</span>
+              <span className="w-13 shrink-0 text-slate-500 font-medium">TTL</span>
               <span className="mr-1 text-slate-400">:</span>
               <span className="text-slate-800 truncate">
                 {student.ttl}
@@ -138,15 +154,7 @@ export default function LandscapeCard({
             </div>
 
             <div className="flex items-start">
-              <span className="w-12 shrink-0 text-slate-500 font-medium">Kelas</span>
-              <span className="mr-1 text-slate-400">:</span>
-              <span className="font-semibold text-slate-800">
-                {student.kelas || "X"}
-              </span>
-            </div>
-
-            <div className="flex items-start">
-              <span className="w-12 shrink-0 text-slate-500 font-medium">Alamat</span>
+              <span className="w-13 shrink-0 text-slate-500 font-medium">Alamat</span>
               <span className="mr-1 text-slate-400">:</span>
               <span className="text-slate-800 truncate">
                 {student.alamat}
@@ -158,7 +166,7 @@ export default function LandscapeCard({
           <div className="flex justify-end pt-1">
             <div className="text-center w-28 scale-90 origin-bottom-right leading-none">
               <p className="text-[6px] text-slate-500 mb-0.5">
-                Surabaya, 15 Juli {student.tahun?.split("/")[0] || "2026"}
+                {school.kota_terbit || "Surabaya"}, 15 Juli {student.tahun?.split("/")[0] || "2026"}
               </p>
               <p className="text-[6.2px] text-slate-700 font-semibold mb-0.5">
                 Kepala Sekolah,
@@ -190,9 +198,9 @@ export default function LandscapeCard({
           background: `linear-gradient(90deg, ${primaryColor} 0%, ${secondaryColor} 100%)`,
         }}
       >
-        <span>KARTU TANDA PELAJAR RESMI</span>
+        <span>{school.nama_sekolah || "KARTU TANDA PELAJAR"}</span>
         <span className="uppercase tracking-widest font-bold">
-          BERLAKU SELAMA MENJADI SISWA
+          {school.teks_footer_depan || "BERLAKU SELAMA MENJADI SISWA"}
         </span>
       </div>
     </div>

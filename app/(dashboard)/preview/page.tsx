@@ -25,10 +25,9 @@ import CardWrapper from "@/components/cards/CardWrapper";
 import toast from "react-hot-toast";
 
 export default function PreviewPage() {
-  // SWR: Instant load from cache (0ms)
-  const [students, setStudents] = useState<Student[]>(() => getCachedStudents() || []);
-  const [school, setSchool] = useState<SchoolSetting | null>(() => getCachedSchool());
-  const [loading, setLoading] = useState(() => !getCachedStudents());
+  const [students, setStudents] = useState<Student[]>([]);
+  const [school, setSchool] = useState<SchoolSetting | null>(null);
+  const [loading, setLoading] = useState(true);
   const [template, setTemplate] = useState<CardTemplate>("portrait");
   const [search, setSearch] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
@@ -36,8 +35,19 @@ export default function PreviewPage() {
   const [globalSide, setGlobalSide] = useState<"front" | "back">("front");
 
   useEffect(() => {
+    // 1. Instantly hydrate from local cache on client mount (0ms, no flicker)
+    const cachedStudents = getCachedStudents();
+    const cachedSchool = getCachedSchool();
+    if (cachedStudents && cachedStudents.length > 0) {
+      setStudents(cachedStudents);
+      setLoading(false);
+    }
+    if (cachedSchool) {
+      setSchool(cachedSchool);
+    }
+
+    // 2. Background revalidation from API
     const fetchData = async () => {
-      if (!getCachedStudents()) setLoading(true);
       try {
         const [studentsData, schoolData] = await Promise.all([
           getStudents(),
@@ -49,7 +59,7 @@ export default function PreviewPage() {
         setSchool(schoolData);
         setCachedSchool(schoolData);
       } catch {
-        if (!getCachedStudents()) {
+        if (!cachedStudents) {
           toast.error("Gagal memuat data kartu");
         }
       } finally {

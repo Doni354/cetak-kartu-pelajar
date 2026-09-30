@@ -1,5 +1,11 @@
 import type { Student, SchoolSetting } from "./types";
 
+export const defaultKetentuanBelakang = `1. Kartu ini adalah tanda pengenal sah siswa di lingkungan sekolah.
+2. Wajib dibawa setiap hari selama kegiatan belajar mengajar berlangsung.
+3. Tidak diperkenankan dipinjamkan atau disalahgunakan oleh pihak lain.
+4. Apabila kartu hilang atau rusak, segera melapor ke bagian Tata Usaha.
+5. Bagi yang menemukan kartu ini, harap mengembalikan ke alamat sekolah.`;
+
 export const defaultSchoolSetting: SchoolSetting = {
   nama_sekolah: "SMK NEGERI 1 CONTOH",
   alamat: "Jl. Pendidikan No. 123, Ketintang, Surabaya",
@@ -8,6 +14,12 @@ export const defaultSchoolSetting: SchoolSetting = {
   warna_primary: "#003366",
   warna_secondary: "#0066cc",
   kepala_sekolah: "Drs. H. Bambang Sutrisno, M.Pd.",
+  ketentuan_belakang: defaultKetentuanBelakang,
+  teks_footer_depan: "BERLAKU SELAMA MENJADI SISWA",
+  teks_footer_belakang: "KARTU TANDA PELAJAR RESMI",
+  kota_terbit: "Surabaya",
+  watermark_opacity: 0.08,
+  show_watermark: true,
 };
 
 export const defaultStudents: Student[] = [

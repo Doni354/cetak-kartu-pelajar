@@ -394,7 +394,13 @@ function updateSchoolSetting(newSettings) {
     "warna_primary",
     "warna_secondary",
     "kepala_sekolah",
-    "tahun_ajaran"
+    "tahun_ajaran",
+    "ketentuan_belakang",
+    "teks_footer_depan",
+    "teks_footer_belakang",
+    "kota_terbit",
+    "watermark_opacity",
+    "show_watermark"
   ];
 
   const lastRow = sheet.getLastRow();

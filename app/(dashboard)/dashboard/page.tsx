@@ -28,15 +28,13 @@ import {
 import toast from "react-hot-toast";
 
 export default function DashboardPage() {
-  // SWR: Instant load from cache (0ms)
-  const [students, setStudents] = useState<Student[]>(() => getCachedStudents() || []);
-  const [school, setSchool] = useState<SchoolSetting | null>(() => getCachedSchool());
-  const [loading, setLoading] = useState(() => !getCachedStudents());
+  const [students, setStudents] = useState<Student[]>([]);
+  const [school, setSchool] = useState<SchoolSetting | null>(null);
+  const [loading, setLoading] = useState(true);
   const [previewTemplate, setPreviewTemplate] = useState<CardTemplate>("portrait");
   const [selectedStudentIndex, setSelectedStudentIndex] = useState(0);
 
   const fetchData = async () => {
-    if (!getCachedStudents()) setLoading(true);
     try {
       const [studentsData, schoolData] = await Promise.all([
         getStudents(),
@@ -48,15 +46,25 @@ export default function DashboardPage() {
       setSchool(schoolData);
       setCachedSchool(schoolData);
     } catch {
-      if (!getCachedStudents()) {
-        toast.error("Gagal memuat data dashboard");
-      }
+      toast.error("Gagal memuat data dashboard");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    // 1. Instantly hydrate from cache on client mount
+    const cachedStudents = getCachedStudents();
+    const cachedSchool = getCachedSchool();
+    if (cachedStudents && cachedStudents.length > 0) {
+      setStudents(cachedStudents);
+      setLoading(false);
+    }
+    if (cachedSchool) {
+      setSchool(cachedSchool);
+    }
+
+    // 2. Background revalidation
     fetchData();
   }, []);
 

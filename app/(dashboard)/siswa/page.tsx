@@ -56,11 +56,10 @@ const emptyForm: StudentFormData = {
 };
 
 export default function SiswaPage() {
-  // SWR: Initialize instantly from client cache if available (0ms load!)
-  const [students, setStudents] = useState<Student[]>(() => getCachedStudents() || []);
-  const [school, setSchool] = useState<SchoolSetting | null>(() => getCachedSchool());
-  const [printQueue, setPrintQueue] = useState<Record<string, string>>(() => getCachedPrintQueue() || {});
-  const [loading, setLoading] = useState(() => !getCachedStudents());
+  const [students, setStudents] = useState<Student[]>([]);
+  const [school, setSchool] = useState<SchoolSetting | null>(null);
+  const [printQueue, setPrintQueue] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
@@ -76,7 +75,6 @@ export default function SiswaPage() {
   // SWR background revalidation
   const fetchStudents = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
-    if (!getCachedStudents()) setLoading(true);
 
     try {
       const [data, schoolData, queueData] = await Promise.all([
@@ -104,9 +102,7 @@ export default function SiswaPage() {
         toast.success("Data berhasil disinkronisasi dengan Google Spreadsheet!");
       }
     } catch {
-      if (!getCachedStudents()) {
-        toast.error("Gagal memuat data siswa");
-      }
+      toast.error("Gagal memuat data siswa");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -114,6 +110,22 @@ export default function SiswaPage() {
   }, []);
 
   useEffect(() => {
+    // 1. Instantly hydrate from local cache on client mount
+    const cachedStudents = getCachedStudents();
+    const cachedSchool = getCachedSchool();
+    const cachedQueue = getCachedPrintQueue();
+    if (cachedStudents && cachedStudents.length > 0) {
+      setStudents(cachedStudents);
+      setLoading(false);
+    }
+    if (cachedSchool) {
+      setSchool(cachedSchool);
+    }
+    if (cachedQueue) {
+      setPrintQueue(cachedQueue);
+    }
+
+    // 2. Background sync
     fetchStudents();
   }, [fetchStudents]);
 

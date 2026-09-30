@@ -27,29 +27,35 @@ import CardBack from "@/templates/CardBack";
 import toast from "react-hot-toast";
 
 export default function CetakPage() {
-  // SWR: Instant load from cache (0ms)
-  const [students, setStudents] = useState<Student[]>(() => getCachedStudents() || []);
-  const [school, setSchool] = useState<SchoolSetting | null>(() => getCachedSchool());
-  const [printQueue, setPrintQueue] = useState<Record<string, string>>(() => getCachedPrintQueue() || {});
-  const [loading, setLoading] = useState(() => !getCachedStudents());
+  const [students, setStudents] = useState<Student[]>([]);
+  const [school, setSchool] = useState<SchoolSetting | null>(null);
+  const [printQueue, setPrintQueue] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
   const [template, setTemplate] = useState<CardTemplate>("landscape");
   const [side, setSide] = useState<"front" | "back">("front");
-  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(() => {
-    const cached = getCachedStudents();
-    const qMap = getCachedPrintQueue() || {};
-    if (cached && cached.length > 0) {
-      const ready = cached.filter((s) => qMap[String(s.id)] === "READY").map((s) => s.id);
-      return new Set(ready.length > 0 ? ready : cached.map((s) => s.id));
-    }
-    return new Set();
-  });
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [selectedClass, setSelectedClass] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "READY" | "PRINTED">("all");
   const [showCropMarks, setShowCropMarks] = useState(true);
 
   useEffect(() => {
+    // 1. Instantly hydrate from local cache on client mount
+    const cachedStudents = getCachedStudents();
+    const cachedSchool = getCachedSchool();
+    const cachedQueue = getCachedPrintQueue() || {};
+
+    if (cachedStudents && cachedStudents.length > 0) {
+      setStudents(cachedStudents);
+      setLoading(false);
+      setPrintQueue(cachedQueue);
+      const ready = cachedStudents.filter((s) => cachedQueue[String(s.id)] === "READY").map((s) => s.id);
+      setSelectedIds(new Set(ready.length > 0 ? ready : cachedStudents.map((s) => s.id)));
+    }
+    if (cachedSchool) {
+      setSchool(cachedSchool);
+    }
+
     const fetchData = async () => {
-      if (!getCachedStudents()) setLoading(true);
       try {
         const [studentsData, schoolData, queueData] = await Promise.all([
           getStudents(),

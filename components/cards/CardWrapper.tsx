@@ -13,6 +13,8 @@ interface CardWrapperProps {
   template?: CardTemplate;
   showControls?: boolean;
   initialSide?: "front" | "back";
+  side?: "front" | "back";
+  onSideChange?: (side: "front" | "back") => void;
   zoom?: number; // scale multiplier e.g. 1, 1.25, 1.5
   onPrintSingle?: (student: Student) => void;
 }
@@ -23,16 +25,23 @@ export default function CardWrapper({
   template = "portrait",
   showControls = true,
   initialSide = "front",
+  side: controlledSide,
+  onSideChange,
   zoom = 1,
   onPrintSingle,
 }: CardWrapperProps) {
-  const [side, setSide] = useState<"front" | "back">(initialSide);
+  const [internalSide, setInternalSide] = useState<"front" | "back">(initialSide);
+  const side = controlledSide !== undefined ? controlledSide : internalSide;
   const [isFlipping, setIsFlipping] = useState(false);
 
   const toggleSide = () => {
     setIsFlipping(true);
     setTimeout(() => {
-      setSide((prev) => (prev === "front" ? "back" : "front"));
+      const nextSide = side === "front" ? "back" : "front";
+      if (controlledSide === undefined) {
+        setInternalSide(nextSide);
+      }
+      onSideChange?.(nextSide);
       setIsFlipping(false);
     }, 150);
   };

@@ -27,6 +27,13 @@ export interface SchoolSetting {
   warna_primary: string;
   warna_secondary: string;
   kepala_sekolah: string;
+  // Kustomisasi Kartu Tambahan
+  ketentuan_belakang?: string;
+  teks_footer_depan?: string;
+  teks_footer_belakang?: string;
+  kota_terbit?: string;
+  watermark_opacity?: number;
+  show_watermark?: boolean;
 }
 
 // ========================

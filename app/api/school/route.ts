@@ -41,6 +41,12 @@ export async function GET() {
         warna_primary: data.warna_primary || serverSchool.warna_primary,
         warna_secondary: data.warna_secondary || serverSchool.warna_secondary,
         kepala_sekolah: data.kepala_sekolah || serverSchool.kepala_sekolah,
+        ketentuan_belakang: data.ketentuan_belakang || serverSchool.ketentuan_belakang,
+        teks_footer_depan: data.teks_footer_depan || serverSchool.teks_footer_depan,
+        teks_footer_belakang: data.teks_footer_belakang || serverSchool.teks_footer_belakang,
+        kota_terbit: data.kota_terbit || serverSchool.kota_terbit,
+        watermark_opacity: data.watermark_opacity !== undefined ? Number(data.watermark_opacity) : serverSchool.watermark_opacity,
+        show_watermark: data.show_watermark !== undefined ? Boolean(data.show_watermark) : serverSchool.show_watermark,
       };
       serverSchool = merged;
       lastSchoolFetch = now;

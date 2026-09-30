@@ -1,6 +1,7 @@
 "use client";
 
 import type { SchoolSetting } from "@/lib/types";
+import { defaultKetentuanBelakang } from "@/lib/mock-data";
 import SafeImage from "@/components/ui/SafeImage";
 
 interface CardBackProps {
@@ -12,80 +13,125 @@ export default function CardBack({ school, layout = "landscape" }: CardBackProps
   const primaryColor = school.warna_primary || "#003366";
   const secondaryColor = school.warna_secondary || "#0066cc";
 
+  const rawRules = school.ketentuan_belakang || defaultKetentuanBelakang;
+  const ruleLines = rawRules
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
   if (layout === "portrait") {
     return (
       <div
-        className="card-ktp-portrait bg-white rounded-xl overflow-hidden shadow-lg border border-slate-200 relative flex flex-col justify-between text-slate-800 select-none print:shadow-none print:border-slate-300"
+        className="card-ktp-portrait bg-white rounded-xl overflow-hidden shadow-lg border border-slate-200 relative flex flex-col justify-between text-slate-800 select-none print:shadow-none print:border-slate-300 print:rounded-none"
         style={{
           boxShadow: "0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.08)",
         }}
       >
-        {/* Subtle Watermark Background */}
-        <div className="absolute inset-0 pointer-events-none opacity-[0.035] flex items-center justify-center overflow-hidden">
-          <svg viewBox="0 0 100 100" className="w-[120%] h-[120%] text-slate-900 fill-current">
-            <circle cx="50" cy="50" r="45" />
-            <polygon points="50,15 61,38 85,38 66,54 73,78 50,64 27,78 34,54 15,38 39,38" fill="#fff" />
-          </svg>
-        </div>
+        {/* Center Watermark: Official School Logo */}
+        {school.show_watermark !== false && (
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-0">
+            {school.logo_url ? (
+              <img
+                src={school.logo_url}
+                alt=""
+                className="w-28 h-28 object-contain select-none grayscale contrast-125"
+                style={{ opacity: school.watermark_opacity ?? 0.08 }}
+              />
+            ) : (
+              <svg
+                viewBox="0 0 100 100"
+                className="w-28 h-28 text-slate-900 fill-current"
+                style={{ opacity: school.watermark_opacity ?? 0.06 }}
+              >
+                <path d="M50 8 L85 22 L85 50 C85 72 50 92 50 92 C50 92 15 72 15 50 L15 22 Z" fill="none" stroke="currentColor" strokeWidth="4" />
+                <path d="M32 45 L50 35 L68 45 L50 55 Z" />
+                <path d="M40 52 L40 64 C40 66 60 66 60 64 L60 52" fill="none" stroke="currentColor" strokeWidth="3" />
+              </svg>
+            )}
+          </div>
+        )}
 
         {/* Top Header */}
         <div
-          className="px-3 py-2 text-white relative z-10 flex items-center gap-2"
+          className="relative px-3 pt-2.5 pb-2 text-white text-center shrink-0 z-10"
           style={{
             background: `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`,
           }}
         >
-          <SafeImage
-            src={school.logo_url}
-            alt="Logo"
-            className="w-5 h-5 rounded-full object-contain bg-white/20 p-0.5"
-            fallbackType="logo"
-            fallbackText={school.nama_sekolah}
-          />
-          <div className="leading-tight">
-            <p className="font-bold text-[8.5px] uppercase tracking-wide">
-              {school.nama_sekolah || "KARTU PELAJAR"}
-            </p>
-            <p className="text-[6.5px] text-white/80">Tata Tertib & Ketentuan Penggunaan</p>
+          <div className="flex items-center justify-center gap-1.5 mb-0.5">
+            <SafeImage
+              src={school.logo_url}
+              alt="Logo"
+              className="w-5 h-5 rounded-full object-contain bg-white/20 p-0.5 shrink-0"
+              fallbackType="logo"
+              fallbackText={school.nama_sekolah}
+            />
+            <div className="text-left leading-tight">
+              <p className="font-extrabold text-[8.5px] uppercase tracking-wide">
+                {school.nama_sekolah || "KARTU PELAJAR"}
+              </p>
+              <p className="text-[5.5px] text-white/85 line-clamp-1">
+                {school.alamat || "Jl. Pendidikan No. 123, Surabaya"}
+              </p>
+            </div>
           </div>
+          <p className="text-[5.5px] text-white/90 font-medium tracking-wide">
+            TATA TERTIB & KETENTUAN PENGGUNAAN
+          </p>
         </div>
 
-        {/* Content Rules */}
-        <div className="px-3 py-2 flex-1 flex flex-col justify-between text-[7px] leading-relaxed text-slate-600">
-          <div>
-            <p className="font-bold text-[8px] text-slate-800 uppercase tracking-wide mb-1 text-center border-b border-slate-200 pb-1">
-              KETENTUAN KARTU SISWA
-            </p>
-            <ol className="space-y-1 list-decimal list-inside pl-0.5 text-[6.8px]">
-              <li>Kartu ini adalah identitas resmi siswa {school.nama_sekolah || "sekolah"}.</li>
-              <li>Wajib dibawa selama jam sekolah & kegiatan resmi sekolah.</li>
-              <li>Kartu ini tidak boleh dipinjamkan atau disalahgunakan oleh pihak lain.</li>
-              <li>Jika kartu hilang atau rusak, segera melapor ke staf Tata Usaha.</li>
-              <li>Penemu kartu ini dimohon menyerahkan ke alamat sekolah tertera.</li>
+        {/* Badge / Header Divider */}
+        <div className="text-center pt-1.5 pb-0.5 relative z-10 shrink-0">
+          <span
+            className="inline-block px-3 py-0.5 rounded-full text-white font-extrabold text-[6px] tracking-widest uppercase shadow-xs"
+            style={{
+              background: `linear-gradient(90deg, ${primaryColor} 0%, ${secondaryColor} 100%)`,
+            }}
+          >
+            KETENTUAN KARTU
+          </span>
+        </div>
+
+        {/* Content Body */}
+        <div className="px-3 py-1 flex-1 flex flex-col justify-between text-[6.5px] leading-relaxed text-slate-700 z-10">
+          <div className="space-y-1">
+            <ol className="space-y-0.5 list-none pl-0">
+              {ruleLines.map((line, idx) => (
+                <li key={idx} className="flex items-start gap-1">
+                  <span className="font-bold text-slate-800 shrink-0 text-[6.2px]">
+                    {line.match(/^\d+[\.\)]/) ? "" : `${idx + 1}.`}
+                  </span>
+                  <span className="leading-tight text-slate-700">
+                    {line.replace(/^\d+[\.\)]\s*/, "")}
+                  </span>
+                </li>
+              ))}
             </ol>
           </div>
 
-          {/* School Contact Box */}
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-1.5 mt-2">
-            <p className="font-semibold text-[7px] text-slate-800 mb-0.5">
-              Alamat Sekretariat:
+          {/* School Contact & Lost Card Box */}
+          <div className="bg-slate-50/90 border border-slate-200 rounded-lg p-1.5 mt-1 backdrop-blur-2xs">
+            <p className="font-bold text-[6.5px] text-slate-800 mb-0.5">
+              Sekretariat & Informasi:
             </p>
-            <p className="text-[6.2px] text-slate-600 line-clamp-2">
-              {school.alamat || "Jl. Pendidikan No. 123"}
+            <p className="text-[5.8px] text-slate-600 line-clamp-2 leading-tight">
+              {school.alamat || "Alamat sekolah tertera di bagian depan kartu."}
             </p>
-            <p className="text-[6px] text-slate-500 italic mt-0.5">
-              &ldquo;{school.slogan || "Disiplin, Berkarakter, Berprestasi"}&rdquo;
+            <p className="text-[5.5px] text-slate-500 italic mt-0.5 leading-tight">
+              * Apabila menemukan kartu ini, harap dikembalikan ke pihak sekolah.
             </p>
           </div>
         </div>
 
-        {/* Bottom Bar */}
+        {/* Footer Banner */}
         <div
-          className="h-2 w-full"
+          className="text-center py-1 text-white font-bold tracking-widest text-[6px] uppercase shrink-0 mt-0.5"
           style={{
-            background: `linear-gradient(90deg, ${primaryColor} 0%, ${secondaryColor} 100%)`,
+            background: `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`,
           }}
-        />
+        >
+          {school.teks_footer_belakang || school.nama_sekolah || "KARTU TANDA PELAJAR RESMI"}
+        </div>
       </div>
     );
   }
@@ -93,14 +139,38 @@ export default function CardBack({ school, layout = "landscape" }: CardBackProps
   // Landscape Layout
   return (
     <div
-      className="card-ktp-landscape bg-white rounded-xl overflow-hidden shadow-lg border border-slate-200 relative flex flex-col justify-between text-slate-800 select-none print:shadow-none print:border-slate-300"
+      className="card-ktp-landscape bg-white rounded-xl overflow-hidden shadow-lg border border-slate-200 relative flex flex-col justify-between text-slate-800 select-none print:shadow-none print:border-slate-300 print:rounded-none"
       style={{
         boxShadow: "0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.08)",
       }}
     >
+      {/* Center Watermark: Official School Logo */}
+      {school.show_watermark !== false && (
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-0">
+          {school.logo_url ? (
+            <img
+              src={school.logo_url}
+              alt=""
+              className="w-32 h-32 object-contain select-none grayscale contrast-125"
+              style={{ opacity: school.watermark_opacity ?? 0.08 }}
+            />
+          ) : (
+            <svg
+              viewBox="0 0 100 100"
+              className="w-32 h-32 text-slate-900 fill-current"
+              style={{ opacity: school.watermark_opacity ?? 0.06 }}
+            >
+              <path d="M50 8 L85 22 L85 50 C85 72 50 92 50 92 C50 92 15 72 15 50 L15 22 Z" fill="none" stroke="currentColor" strokeWidth="4" />
+              <path d="M32 45 L50 35 L68 45 L50 55 Z" />
+              <path d="M40 52 L40 64 C40 66 60 66 60 64 L60 52" fill="none" stroke="currentColor" strokeWidth="3" />
+            </svg>
+          )}
+        </div>
+      )}
+
       {/* Top Header */}
       <div
-        className="px-3.5 py-2 text-white relative z-10 flex items-center justify-between"
+        className="relative px-3.5 py-1.5 text-white flex items-center justify-between shrink-0 z-10"
         style={{
           background: `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`,
         }}
@@ -109,57 +179,80 @@ export default function CardBack({ school, layout = "landscape" }: CardBackProps
           <SafeImage
             src={school.logo_url}
             alt="Logo"
-            className="w-5 h-5 rounded-full object-contain bg-white/20 p-0.5"
+            className="w-6 h-6 rounded-full object-contain bg-white/20 p-0.5 shrink-0"
             fallbackType="logo"
             fallbackText={school.nama_sekolah}
           />
-          <div>
-            <p className="font-bold text-[9px] uppercase tracking-wide">
+          <div className="leading-tight">
+            <p className="font-extrabold text-[9px] uppercase tracking-wide">
               {school.nama_sekolah || "KARTU TANDA PELAJAR"}
             </p>
-            <p className="text-[6.5px] text-white/80">Tata Tertib & Ketentuan Penggunaan</p>
+            <p className="text-[5.8px] text-white/85 line-clamp-1">
+              {school.alamat || "Jl. Pendidikan No. 123, Ketintang, Surabaya"}
+            </p>
           </div>
         </div>
-        <span className="text-[7px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white uppercase tracking-wider">
-          Ketentuan
-        </span>
+
+        <div className="text-right shrink-0">
+          <span className="inline-block px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-xs text-white font-extrabold text-[6.5px] tracking-wider uppercase border border-white/30">
+            TATA TERTIB
+          </span>
+        </div>
       </div>
 
-      {/* Rules in 2 Columns or structured */}
-      <div className="px-4 py-2 flex-1 flex gap-3 items-center text-[7px] leading-relaxed text-slate-600">
-        <div className="flex-1 space-y-1">
-          <ol className="space-y-1 list-decimal list-inside pl-0.5 text-[6.8px]">
-            <li>Kartu ini adalah bukti identitas sah siswa {school.nama_sekolah || "sekolah"}.</li>
-            <li>Wajib dibawa selama kegiatan pembelajaran dan acara resmi sekolah.</li>
-            <li>Tidak dapat dialihkan atau dipindahtangankan kepada orang lain.</li>
-            <li>Jika kartu hilang atau rusak, segera hubungi bagian Tata Usaha (TU).</li>
-            <li>Barang siapa menemukan kartu ini, harap mengembalikan ke alamat sekolah.</li>
+      {/* Rules in 2 Balanced Columns */}
+      <div className="px-3.5 py-1.5 flex-1 flex gap-3 items-center text-[6.8px] leading-relaxed text-slate-700 z-10">
+        {/* Left Column: Numbered Rules */}
+        <div className="flex-1 space-y-0.5">
+          <ol className="space-y-0.5 list-none pl-0">
+            {ruleLines.map((line, idx) => (
+              <li key={idx} className="flex items-start gap-1">
+                <span className="font-bold text-slate-800 shrink-0 text-[6.5px]">
+                  {line.match(/^\d+[\.\)]/) ? "" : `${idx + 1}.`}
+                </span>
+                <span className="leading-tight text-slate-700">
+                  {line.replace(/^\d+[\.\)]\s*/, "")}
+                </span>
+              </li>
+            ))}
           </ol>
         </div>
 
-        {/* School Info Box Right */}
-        <div className="w-36 bg-slate-50 border border-slate-200 rounded-lg p-2 text-left shrink-0">
-          <p className="font-bold text-[7.5px] text-slate-800 mb-0.5">
-            Sekretariat Sekolah:
-          </p>
-          <p className="text-[6.5px] text-slate-600 line-clamp-2 leading-tight">
-            {school.alamat || "Jl. Pendidikan No. 123"}
-          </p>
-          <p className="text-[6px] text-slate-500 italic mt-1 leading-tight">
-            &ldquo;{school.slogan || "Berkarakter & Berprestasi"}&rdquo;
-          </p>
+        {/* Right Column: School Info & Return Notice */}
+        <div className="w-36 bg-slate-50/90 border border-slate-200 rounded-xl p-2 text-left shrink-0 backdrop-blur-2xs flex flex-col justify-between h-full">
+          <div>
+            <p className="font-bold text-[7px] text-slate-800 mb-0.5">
+              Sekretariat Sekolah:
+            </p>
+            <p className="text-[6.2px] text-slate-600 line-clamp-2 leading-tight">
+              {school.alamat || "Jl. Pendidikan No. 123"}
+            </p>
+            {school.slogan && (
+              <p className="text-[5.8px] text-slate-500 italic mt-0.5 leading-tight">
+                &ldquo;{school.slogan}&rdquo;
+              </p>
+            )}
+          </div>
+
+          <div className="pt-1 border-t border-slate-200/80 mt-1">
+            <p className="text-[5.5px] text-slate-500 leading-tight">
+              ⚠️ Bagi yang menemukan kartu ini, mohon untuk diserahkan ke pihak sekolah.
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Footer stripe */}
+      {/* Footer Banner */}
       <div
-        className="px-3 py-1 text-white flex items-center justify-between text-[6.5px] font-medium"
+        className="px-3 py-0.5 text-white flex items-center justify-between text-[5.8px] font-medium shrink-0"
         style={{
           background: `linear-gradient(90deg, ${primaryColor} 0%, ${secondaryColor} 100%)`,
         }}
       >
-        <span>Aplikasi Cetak Kartu Pelajar Resmi</span>
-        <span>Dokumen Internal Sekolah</span>
+        <span>{school.nama_sekolah || "KARTU TANDA PELAJAR"}</span>
+        <span className="uppercase tracking-widest font-bold">
+          {school.teks_footer_belakang || "TATA TERTIB & KETENTUAN RESMI"}
+        </span>
       </div>
     </div>
   );
